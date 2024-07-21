@@ -1,0 +1,50 @@
+---
+title: "Causal Effect"
+author: "Ronit Dash"
+format: html
+execute: 
+  echo: false
+---
+
+```{r}
+#| message: FALSE
+library(tidyverse)
+library(primer.data)
+library(brms)
+library(tidybayes)
+library(gtsummary)
+```
+
+```{r}
+ch6 <- trains |>  select(att_end, treatment)
+ndata <- tibble(treatment = c("Treated", "Control"))
+```
+
+We are attempting to find the attitudes of people towards immigration when being exposed to Spanish-speakers using a 2012 study on Boston commuters. The time spread between the data and contemporary times may cause the relationships between opinions different, which is a potential problem. We modeled a graph to summarize the attitudes on immigration. The average causal effect was mostly in the 95% confidence interval of 1.5-2.5, and hearing Spanish-Speakers caused more conservative shifting.
+
+```{r}
+#| cache: TRUE
+fit_gauss <- brm(formula = att_end ~ treatment,
+  data = ch6, 
+  family = gaussian(), 
+  refresh = 0, silent = 2, seed = 9)
+```
+
+```{r}
+tbl_regression(fit_gauss)
+```
+The posterior, or the coefficient of Control is centered around −1.5 with a 95% Confidence Interval between −2.5 and −0.5.
+
+```{r}
+fit_gauss |> add_epred_draws(newdata = ndata) |>
+select(treatment, .draw, .epred) |> 
+pivot_wider(id_cols = .draw, names_from = treatment, values_from = .epred) |>
+mutate(causal_effect = Treated - Control) |>
+select(- .draw) |> ggplot(aes(x = causal_effect)) +
+geom_histogram(aes(y = after_stat(count / sum(count))), bins = 100) +
+scale_y_continuous(labels = scales::percent_format()) + theme_classic() +
+labs(title = "Posterior for Average Treatment Effect",
+subtitle = "Exposure to Spanish-speakers shifts immigration attitudes rightward", 
+x = "Difference in Attitude", y = "Probability")
+```
+
